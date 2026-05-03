@@ -26,6 +26,7 @@ async function run() {
 
     const database = client.db("lostAndFoundDB");
     const itemsCollection = database.collection("items");
+    const claimsCollection = database.collection("claims");
 
     app.get("/", (req, res) => {
       res.send("Lost and Found server is running");
@@ -79,6 +80,64 @@ async function run() {
         .find(query)
         .sort({ createdAt: -1 })
         .toArray();
+      res.send(result);
+    });
+
+    // create claim request
+    app.post("/claims", async (req, res) => {
+      const claim = req.body;
+
+      const newClaim = {
+        ...claim,
+        status: "pending",
+        createdAt: new Date(),
+      };
+
+      const result = await claimsCollection.insertOne(newClaim);
+      res.send(result);
+    });
+
+    // get claims by user email
+    app.get("/claims/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const query = { claimantEmail: email };
+      const result = await claimsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
+    // get claims for items posted by owner
+    app.get("/owner-claims/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const query = { ownerEmail: email };
+      const result = await claimsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(result);
+    });
+
+    // update claim status
+    app.patch("/claims/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      const filter = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: {
+          status: status,
+          updatedAt: new Date(),
+        },
+      };
+
+      const result = await claimsCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
 
