@@ -5,7 +5,6 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
-const port = process.env.PORT || 8000;
 
 app.use(
   cors({
@@ -21,6 +20,10 @@ app.use(express.json());
 
 const uri = process.env.MONGODB_URI;
 
+if (!uri) {
+  console.error("MONGODB_URI is missing");
+}
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -29,159 +32,223 @@ const client = new MongoClient(uri, {
   },
 });
 
+let db;
 let itemsCollection;
 let claimsCollection;
 
-async function run() {
-  try {
-    await client.connect();
+async function connectDB() {
+  if (db) return;
 
-    const database = client.db("lostAndFoundDB");
-    itemsCollection = database.collection("items");
-    claimsCollection = database.collection("claims");
+  await client.connect();
 
-    await client.db("admin").command({ ping: 1 });
-    console.log("MongoDB connected successfully");
-  } catch (error) {
-    console.error("MongoDB connection error:", error);
-  }
+  db = client.db("lostAndFoundDB");
+  itemsCollection = db.collection("items");
+  claimsCollection = db.collection("claims");
+
+  console.log("MongoDB connected successfully");
 }
-
-run().catch(console.dir);
 
 app.get("/", (req, res) => {
   res.send("Lost and Found Backend is running successfully");
 });
 
-app.post("/items", async (req, res) => {
-  const item = req.body;
+app.get("/items", async (req, res) => {
+  try {
+    await connectDB();
 
-  const newItem = {
-    ...item,
-    status: item.status || "open",
-    createdAt: new Date(),
-  };
+    const result = await itemsCollection
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray();
 
-  const result = await itemsCollection.insertOne(newItem);
-  res.send(result);
+    res.send(result);
+  } catch (error) {
+    console.error("GET /items error:", error);
+    res.status(500).send({ message: "Failed to load items", error: error.message });
+  }
 });
 
-app.get("/items", async (req, res) => {
-  const result = await itemsCollection
-    .find()
-    .sort({ createdAt: -1 })
-    .toArray();
+app.post("/items", async (req, res) => {
+  try {
+    await connectDB();
 
-  res.send(result);
+    const item = req.body;
+
+    const newItem = {
+      ...item,
+      status: item.status || "open",
+      createdAt: new Date(),
+    };
+
+    const result = await itemsCollection.insertOne(newItem);
+    res.send(result);
+  } catch (error) {
+    console.error("POST /items error:", error);
+    res.status(500).send({ message: "Failed to add item", error: error.message });
+  }
 });
 
 app.get("/items/:id", async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
+  try {
+    await connectDB();
 
-  const result = await itemsCollection.findOne(query);
-  res.send(result);
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+
+    const result = await itemsCollection.findOne(query);
+    res.send(result);
+  } catch (error) {
+    console.error("GET /items/:id error:", error);
+    res.status(500).send({ message: "Failed to load item", error: error.message });
+  }
 });
 
 app.get("/my-items/:email", async (req, res) => {
-  const email = req.params.email;
-  const query = { userEmail: email };
+  try {
+    await connectDB();
 
-  const result = await itemsCollection
-    .find(query)
-    .sort({ createdAt: -1 })
-    .toArray();
+    const email = req.params.email;
+    const query = { userEmail: email };
 
-  res.send(result);
+    const result = await itemsCollection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("GET /my-items/:email error:", error);
+    res.status(500).send({ message: "Failed to load my items", error: error.message });
+  }
 });
 
 app.patch("/items/:id", async (req, res) => {
-  const id = req.params.id;
-  const updatedItem = req.body;
+  try {
+    await connectDB();
 
-  const filter = { _id: new ObjectId(id) };
+    const id = req.params.id;
+    const updatedItem = req.body;
 
-  const updateDoc = {
-    $set: {
-      type: updatedItem.type,
-      title: updatedItem.title,
-      category: updatedItem.category,
-      description: updatedItem.description,
-      location: updatedItem.location,
-      date: updatedItem.date,
-      image: updatedItem.image,
-      contactInfo: updatedItem.contactInfo,
-      status: updatedItem.status,
-      updatedAt: new Date(),
-    },
-  };
+    const filter = { _id: new ObjectId(id) };
 
-  const result = await itemsCollection.updateOne(filter, updateDoc);
-  res.send(result);
+    const updateDoc = {
+      $set: {
+        type: updatedItem.type,
+        title: updatedItem.title,
+        category: updatedItem.category,
+        description: updatedItem.description,
+        location: updatedItem.location,
+        date: updatedItem.date,
+        image: updatedItem.image,
+        contactInfo: updatedItem.contactInfo,
+        status: updatedItem.status,
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = await itemsCollection.updateOne(filter, updateDoc);
+    res.send(result);
+  } catch (error) {
+    console.error("PATCH /items/:id error:", error);
+    res.status(500).send({ message: "Failed to update item", error: error.message });
+  }
 });
 
 app.delete("/items/:id", async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
+  try {
+    await connectDB();
 
-  const result = await itemsCollection.deleteOne(query);
-  res.send(result);
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+
+    const result = await itemsCollection.deleteOne(query);
+    res.send(result);
+  } catch (error) {
+    console.error("DELETE /items/:id error:", error);
+    res.status(500).send({ message: "Failed to delete item", error: error.message });
+  }
 });
 
 app.post("/claims", async (req, res) => {
-  const claim = req.body;
+  try {
+    await connectDB();
 
-  const newClaim = {
-    ...claim,
-    status: "pending",
-    createdAt: new Date(),
-  };
+    const claim = req.body;
 
-  const result = await claimsCollection.insertOne(newClaim);
-  res.send(result);
+    const newClaim = {
+      ...claim,
+      status: "pending",
+      createdAt: new Date(),
+    };
+
+    const result = await claimsCollection.insertOne(newClaim);
+    res.send(result);
+  } catch (error) {
+    console.error("POST /claims error:", error);
+    res.status(500).send({ message: "Failed to create claim", error: error.message });
+  }
 });
 
 app.get("/claims/:email", async (req, res) => {
-  const email = req.params.email;
-  const query = { claimantEmail: email };
+  try {
+    await connectDB();
 
-  const result = await claimsCollection
-    .find(query)
-    .sort({ createdAt: -1 })
-    .toArray();
+    const email = req.params.email;
+    const query = { claimantEmail: email };
 
-  res.send(result);
+    const result = await claimsCollection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("GET /claims/:email error:", error);
+    res.status(500).send({ message: "Failed to load claims", error: error.message });
+  }
 });
 
 app.get("/owner-claims/:email", async (req, res) => {
-  const email = req.params.email;
-  const query = { ownerEmail: email };
+  try {
+    await connectDB();
 
-  const result = await claimsCollection
-    .find(query)
-    .sort({ createdAt: -1 })
-    .toArray();
+    const email = req.params.email;
+    const query = { ownerEmail: email };
 
-  res.send(result);
+    const result = await claimsCollection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("GET /owner-claims/:email error:", error);
+    res.status(500).send({ message: "Failed to load owner claims", error: error.message });
+  }
 });
 
 app.patch("/claims/:id", async (req, res) => {
-  const id = req.params.id;
-  const { status } = req.body;
+  try {
+    await connectDB();
 
-  const filter = { _id: new ObjectId(id) };
+    const id = req.params.id;
+    const { status } = req.body;
 
-  const updateDoc = {
-    $set: {
-      status,
-      updatedAt: new Date(),
-    },
-  };
+    const filter = { _id: new ObjectId(id) };
 
-  const result = await claimsCollection.updateOne(filter, updateDoc);
-  res.send(result);
+    const updateDoc = {
+      $set: {
+        status,
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = await claimsCollection.updateOne(filter, updateDoc);
+    res.send(result);
+  } catch (error) {
+    console.error("PATCH /claims/:id error:", error);
+    res.status(500).send({ message: "Failed to update claim", error: error.message });
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+module.exports = app;
