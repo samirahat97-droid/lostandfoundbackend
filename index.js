@@ -11,7 +11,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://your-netlify-site.netlify.app",
+      "https://rococo-dusk-4fdc4e.netlify.app/",
     ],
     credentials: true,
   })
